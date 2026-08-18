@@ -249,22 +249,43 @@ public class XClearlag extends JavaPlugin {
         DebugLogger.debug("Scheduler", "Detecting server type...");
         boolean isFolia = false;
         try {
-            // Check for Folia by looking for the GlobalRegionScheduler method
-            // This is more reliable than Class.forName across different versions
-            Bukkit.getServer().getClass().getMethod("getGlobalRegionScheduler");
-            isFolia = true;
-        } catch (Throwable ignored) {
-            // Fallback to class check
+            // Method 1: Check for getGlobalRegionScheduler on server (standard Folia/Canvas)
             try {
-                Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
+                Bukkit.getServer().getClass().getMethod("getGlobalRegionScheduler");
                 isFolia = true;
-            } catch (Throwable ignored2) {}
-        }
+                DebugLogger.debug("Scheduler", "Folia detected via getGlobalRegionScheduler method.");
+            } catch (NoSuchMethodException ignored) {
+                // Method 2: Check for getGlobalRegionScheduler as static Bukkit method
+                try {
+                    Bukkit.class.getMethod("getGlobalRegionScheduler");
+                    isFolia = true;
+                    DebugLogger.debug("Scheduler", "Folia detected via static Bukkit.getGlobalRegionScheduler method.");
+                } catch (NoSuchMethodException ignored2) {
+                    // Method 3: Check for RegionizedServer class (legacy detection)
+                    try {
+                        Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
+                        isFolia = true;
+                        DebugLogger.debug("Scheduler", "Folia detected via RegionizedServer class.");
+                    } catch (ClassNotFoundException ignored3) {
+                        // Method 4: Check for the Folia ScheduledTask class
+                        try {
+                            Class.forName("io.papermc.paper.threadedregions.scheduler.ScheduledTask");
+                            isFolia = true;
+                            DebugLogger.debug("Scheduler", "Folia detected via ScheduledTask class.");
+                        } catch (ClassNotFoundException ignored4) {}
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
 
         if (isFolia) {
             schedulerAdapter = new FoliaSchedulerAdapter(this);
-            logInfo("&bFolia &fdetected&a! Using &fregional scheduler adapter&a.");
-            DebugLogger.debug("Scheduler", "Folia detected, using FoliaSchedulerAdapter.");
+            if (!((FoliaSchedulerAdapter) schedulerAdapter).isInitialized()) {
+                logWarning("Folia scheduler adapter failed to initialize! The plugin will not function correctly.");
+                logWarning("Your server fork (" + Bukkit.getServer().getName() + " " + Bukkit.getServer().getVersion() + ") may not be fully Folia-compatible.");
+            }
+            logInfo("&bFolia/Canvas &fdetected&a! Using &fregional scheduler adapter&a.");
+            DebugLogger.debug("Scheduler", "Using FoliaSchedulerAdapter.");
         } else {
             schedulerAdapter = new BukkitSchedulerAdapter(this);
             logInfo("&fStandard Bukkit/Paper &fdetected&7! Using &fstandard scheduler adapter&7.");
